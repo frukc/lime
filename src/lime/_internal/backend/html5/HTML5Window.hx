@@ -78,8 +78,6 @@ class HTML5Window
 
 	private var __focusPending:Bool;
 
-	private var __stopMousePropagation = false;
-
 	public function new(parent:Window)
 	{
 		this.parent = parent;
@@ -224,10 +222,10 @@ class HTML5Window
 			element.addEventListener("dragover", handleDragEvent, true);
 			element.addEventListener("drop", handleDragEvent, true);
 
-			element.addEventListener("touchstart", handleTouchEvent, true);
-			element.addEventListener("touchmove", handleTouchEvent, true);
-			element.addEventListener("touchend", handleTouchEvent, true);
-			element.addEventListener("touchcancel", handleTouchEvent, true);
+			// element.addEventListener("touchstart", handleTouchEvent, true);
+			// element.addEventListener("touchmove", handleTouchEvent, true);
+			// element.addEventListener("touchend", handleTouchEvent, true);
+			// element.addEventListener("touchcancel", handleTouchEvent, true);
 
 			element.addEventListener("gamepadconnected", handleGamepadEvent, true);
 			element.addEventListener("gamepaddisconnected", handleGamepadEvent, true);
@@ -282,10 +280,10 @@ class HTML5Window
 			element.removeEventListener("dragover", handleDragEvent, true);
 			element.removeEventListener("drop", handleDragEvent, true);
 
-			element.removeEventListener("touchstart", handleTouchEvent, true);
-			element.removeEventListener("touchmove", handleTouchEvent, true);
-			element.removeEventListener("touchend", handleTouchEvent, true);
-			element.removeEventListener("touchcancel", handleTouchEvent, true);
+			// element.removeEventListener("touchstart", handleTouchEvent, true);
+			// element.removeEventListener("touchmove", handleTouchEvent, true);
+			// element.removeEventListener("touchend", handleTouchEvent, true);
+			// element.removeEventListener("touchcancel", handleTouchEvent, true);
 
 			element.removeEventListener("gamepadconnected", handleGamepadEvent, true);
 			element.removeEventListener("gamepaddisconnected", handleGamepadEvent, true);
@@ -482,8 +480,7 @@ class HTML5Window
 	private function handleCutOrCopyEvent(event:ClipboardEvent):Void
 	{
 		var text = Clipboard.text;
-		if (text == null)
-		{
+		if (text == null) {
 			text = "";
 		}
 		event.clipboardData.setData("text/plain", text);
@@ -639,6 +636,19 @@ class HTML5Window
 					x = (event.clientX - rect.left);
 					// y = (event.clientY - rect.top) * (window.__backend.div.style.height / rect.height);
 					y = (event.clientY - rect.top);
+
+					var aspect = js.Browser.window.devicePixelRatio;
+					if (aspect > 2)
+					{
+						x = (event.clientX - rect.left) * (Std.parseFloat(parent.__backend.div.style.width) / rect.width);
+						y = (event.clientY - rect.top) * (Std.parseFloat(parent.__backend.div.style.height) / rect.height);
+					}
+					else
+					{
+						x = (event.clientX - rect.left);
+						y = (event.clientY - rect.top);
+					}
+
 				}
 				else
 				{
@@ -658,25 +668,15 @@ class HTML5Window
 				case "mousedown":
 					if (event.currentTarget == parent.element)
 					{
-						// while the mouse button is down, and the mouse has
-						// moved outside the bounds of the parent element, we
-						// want both onMouseMove and onMouseUp to continue to be
-						// dispatched. otherwise, dragging objects around with
-						// the mouse will appear broken.
-						// however, if the mouse button isn't down, and the
-						// mouse is outside the bounds of the parent element,
-						// then onMouseMove and onMouseUp don't need to be
-						// dispatched.
-						// Flash embedded in HTML worked similarly.
+						// Release outside browser window
 						Browser.window.addEventListener("mouseup", handleMouseEvent);
-						Browser.window.addEventListener("mousemove", handleMouseEvent);
 					}
-					// just to be safe, clear the flag on every mouse down
-					__stopMousePropagation = false;
 
-					parent.clickCount = event.detail;
+					// parent.clickCount = event.detail;
+					parent.clickCount = 1;
 					parent.onMouseDown.dispatch(x, y, event.button);
-					parent.clickCount = 0;
+					// parent.clickCount = 0;
+					parent.clickCount = 1;
 
 					if (parent.onMouseDown.canceled && event.cancelable)
 					{
@@ -706,22 +706,18 @@ class HTML5Window
 					}
 
 				case "mouseup":
-					// see comment below for mousemove for an explanation of
-					// what the __stopMousePropagation flag is used for.
-					if (__stopMousePropagation && event.currentTarget != parent.element)
+					Browser.window.removeEventListener("mouseup", handleMouseEvent);
+
+					if (event.currentTarget == parent.element)
 					{
-						__stopMousePropagation = false;
-						return;
+						event.stopPropagation();
 					}
 
-					Browser.window.removeEventListener("mouseup", handleMouseEvent);
-					Browser.window.removeEventListener("mousemove", handleMouseEvent);
-
-					__stopMousePropagation = event.currentTarget == parent.element;
-
-					parent.clickCount = event.detail;
+					// parent.clickCount = event.detail;
+					parent.clickCount = 1;
 					parent.onMouseUp.dispatch(x, y, event.button);
-					parent.clickCount = 0;
+					// parent.clickCount = 0;
+					parent.clickCount = 1;
 
 					if (parent.onMouseUp.canceled && event.cancelable)
 					{
@@ -729,45 +725,6 @@ class HTML5Window
 					}
 
 				case "mousemove":
-					// this same listener is added to the parent element and to
-					// the browser window for both the mousemove and the mouseup
-					// event types, if mousedown happens first. this allows both
-					// onMouseMove and onMouseUp to be dispatched if the mouse
-					// moves outside the bounds of the parent element.
-
-					// since browser mouse events bubble, this listener will be
-					// called for the parent element first, as long as the mouse
-					// is still over the parent element. in that case, when the
-					// listener is called for the browser window, it should
-					// return early so that onMouseMove or onMouseUp isn't
-					// dispatched twice. this is done by checking the
-					// __stopMousePropagation flag when the current target isn't
-					// the parent element.
-
-					// however, if the mouse isn't over the parent element, the
-					// listener will be called only for the browser window, and
-					// not the parent element. in that case, it can proceed to
-					// dispatch either onMouseMove or onMouseUp, since this
-					// listener was called only once.
-
-					// again, this applies only if the mouse button is down. if
-					// the mouse button isn't down, then the listener won't be
-					// added to the browser window, and event won't be
-					// dispatched outside the bounds of the parent element.
-
-					if (__stopMousePropagation && event.currentTarget != parent.element)
-					{
-						// why not call event.stopPropagation() here? well,
-						// other JS code in the page may still be interested in
-						// the event. listening for the same events on both the
-						// parent element and on the browser window is just an
-						// implementation detail and shouldn't affect other
-						// listeners.
-						__stopMousePropagation = false;
-						return;
-					}
-					__stopMousePropagation = event.currentTarget == parent.element;
-
 					if (x != cacheMouseX || y != cacheMouseY)
 					{
 						parent.onMouseMove.dispatch(x, y);
@@ -865,11 +822,7 @@ class HTML5Window
 			}
 		}
 
-		var touch:Touch;
-		var x:Float;
-		var y:Float;
-		var cacheX:Float;
-		var cacheY:Float;
+		var touch, x, y, cacheX, cacheY;
 
 		for (data in event.changedTouches)
 		{
@@ -878,8 +831,19 @@ class HTML5Window
 
 			if (rect != null)
 			{
-				x = (data.clientX - rect.left) * (windowWidth / rect.width);
-				y = (data.clientY - rect.top) * (windowHeight / rect.height);
+				// x = (data.clientX - rect.left) * (windowWidth / rect.width);
+				// y = (data.clientY - rect.top) * (windowHeight / rect.height);
+				x = (data.clientX - rect.left);
+				y = (data.clientY - rect.top);
+
+				// QUICKFIX: don't multiply for DOM when initial-scale == 1.0
+				if (canvas != null || div == null || js.Browser.window.devicePixelRatio > 2) {
+					// todo: perhaps try using parent.__width, parent.__height instead of windowHeight
+					// todo: look at handleMouseEvent -> it's working there correctly
+					x = x * (windowWidth / rect.width);
+					y = y * (windowHeight / rect.height);
+				}
+
 			}
 			else
 			{
@@ -910,7 +874,10 @@ class HTML5Window
 
 				Touch.onStart.dispatch(touch);
 
-				if (primaryTouch == null)
+				if (primaryTouch == null ||
+					// todo: QUICKFIX!
+					Lambda.count(currentTouches) == 1 ||
+					(event.touches != null && event.touches.length == 1))
 				{
 					primaryTouch = touch;
 				}
@@ -1303,6 +1270,7 @@ class HTML5Window
 				textInput.removeEventListener('paste', handlePasteEvent, true);
 				textInput.removeEventListener('compositionstart', handleCompositionstartEvent, true);
 				textInput.removeEventListener('compositionend', handleCompositionendEvent, true);
+
 			}
 		}
 
@@ -1346,8 +1314,7 @@ class HTML5Window
 	{
 		if (!parent.__resizable) return;
 
-		var elementWidth:Float;
-		var elementHeight:Float;
+		var elementWidth, elementHeight;
 
 		if (parent.element != null)
 		{
@@ -1373,8 +1340,8 @@ class HTML5Window
 				{
 					if (parent.__width != elementWidth || parent.__height != elementHeight)
 					{
-						parent.__width = Std.int(elementWidth);
-						parent.__height = Std.int(elementHeight);
+						parent.__width = elementWidth;
+						parent.__height = elementHeight;
 
 						if (canvas != null)
 						{
@@ -1393,7 +1360,7 @@ class HTML5Window
 							div.style.height = elementHeight + "px";
 						}
 
-						parent.onResize.dispatch(Std.int(elementWidth), Std.int(elementHeight));
+						parent.onResize.dispatch(elementWidth, elementHeight);
 					}
 				}
 				else
